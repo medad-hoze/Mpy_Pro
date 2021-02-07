@@ -400,7 +400,7 @@ def clean_slivers_by_vertex(PARCEL_ALL,SLIVERS_CLEAN,border,Dis_search,PARCEL_AL
             poly_vertices = [r for r in distance_vertices if r[0][5] == oid]
             for part in geometry:
                     for pt in part:
-                            if str(type(pt)) != "<type 'NoneType'>":
+                            if pt:
                                     num_point = 0
                                     #print str(pt.X) + "--" + str(pt.Y)
                                     this_x = float("{0:.2f}".format(pt.X))
@@ -657,33 +657,21 @@ def Insert_to_table(bankal,tazar_copy,GDB):
         data = [[i.shape,str(i.PARCEL)+'-'+str(i.GUSH_NUM)+'-'+str(i.GUSH_SUFFIX)] for i in arcpy.SearchCursor(tazar_copy)]
         new_shamce = True
 
-    in_tazar_copy = []
-    with arcpy.da.SearchCursor ('bankal_lyr', ['SHAPE@','PARCEL','GUSH_NUM','GUSH_SUFFIX']) as cursor:
-        for row in cursor:
-            geom   = row[0]
-            midpnt = geom.labelPoint
-            key    = str(row[1])+'-'+str(row[2])+'-'+str(row[3])
-            for i in data:
-                if i[0].distanceTo(midpnt) == 0:
-                    in_tazar_copy.append([i[1],key])
-        del cursor
+
+    in_tazar_copy = [[i[1],str(row[1])+'-'+str(row[2])+'-'+str(row[3])] for row in arcpy.da.SearchCursor ('bankal_lyr', ['SHAPE@','PARCEL','GUSH_NUM','GUSH_SUFFIX'])\
+                                                                            for i in data if i[0].distanceTo(row[0].labelPoint) == 0]
 
 
     data          = [[i.shape,str(i.PARCEL)+'-'+str(i.GUSH_NUM)+'-'+str(i.GUSH_SUFFIX)] for i in arcpy.SearchCursor('bankal_lyr')]
-    in_bankal     = []
+
     fields_parcel = ['SHAPE@','PARCEL_FINAL','GUSHNUM','GUSHSUFFIX']
     if new_shamce == True:
         fields_parcel = ['SHAPE@','PARCEL','GUSH_NUM','GUSH_SUFFIX']
 
-    with arcpy.da.SearchCursor (tazar_copy, fields_parcel) as cursor:
-        for row in cursor:
-            geom   = row[0]
-            midpnt = geom.labelPoint
-            key    = str(row[1])+'-'+str(row[2])+'-'+str(row[3])
-            for i in data:
-                if i[0].distanceTo(midpnt) == 0:
-                    in_bankal.append([key,i[1]])
-        del cursor
+
+    in_bankal = [[str(row[1])+'-'+str(row[2])+'-'+str(row[3]),i[1]] for row in arcpy.da.SearchCursor (tazar_copy, fields_parcel)\
+                                                                        for i in data if i[0].distanceTo(row[0].labelPoint) == 0]
+
 
     data1 = [ast.literal_eval(i) for i in list(set([str(i) for i in in_tazar_copy + in_bankal]))]
 
@@ -1515,7 +1503,7 @@ def Snap_border_pnts(ws,border,parcel_all,Dis_search = 1):
         poly_vertices = [r for r in distance_vertices if r[0][5] == oid]
         for part in geometry:
             for pt in part:
-                if str(type(pt)) != "<type 'NoneType'>":
+                if pt:
                     num_point = 0
                     #print str(pt.X) + "--" + str(pt.Y)
                     this_x = float("{0:.2f}".format(pt.X))
@@ -1558,7 +1546,7 @@ def clean_pseudo(parcel_all, border,curves):
             pts_trio = []
             deleted = []
             for pt in part:
-                    if str(type(pt)) != "<type 'NoneType'>":
+                    if pt:
                             pts_trio.append([pt.X, pt.Y])
                             if len(pts_trio) == 3:
                                 x = pts_trio[1][0]
@@ -2067,11 +2055,14 @@ def generateCurves(fc):
                 if i:
                     for f in i:
                         if f:
-                            pts.append(arcpy.Point(f[0],f[1]))
-                        else:
+                            for n in f:
+                                if n:
+                                    pts.append(arcpy.Point(n[0],n[1]))
                             pts.append(None)
 
-        poly    = Split_List_by_value(pts,None,True) 
+
+        poly = Split_List_by_value(pts,None,True) 
+        poly = [i for i in poly if i]
 
         if pts:
             array        = arcpy.Array(None)
