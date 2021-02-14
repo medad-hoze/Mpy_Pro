@@ -646,6 +646,10 @@ def Insert_to_table(bankal,tazar_copy,GDB):
     arcpy.MakeFeatureLayer_management      (bankal,'bankal_lyr')
     arcpy.SelectLayerByLocation_management ('bankal_lyr','INTERSECT',tazar_copy, '1 Meters')
 
+    print_arcpy_message(tazar_copy)
+    columns = [f.name for f in arcpy.ListFields(tazar_copy)]
+    print_arcpy_message(columns)
+
     None_me = [i for i in arcpy.SearchCursor(tazar_copy) if i.PARCEL_FINAL == None]
     if None_me:
         arcpy.CalculateField_management  (tazar_copy, 'PARCEL_FINAL', "int( ''.join ([i for i in !PARCELNAME! if i.isdigit()]))", "PYTHON" ) 
@@ -1374,7 +1378,6 @@ def stubborn_parts(path,bankal,tazar,Out_put,curves = ''):
 
             if (before > after) or (None_in_f > 0):
                 print_arcpy_message     ("Stubbern seems to delete features, Cancel and return 1 step back",1)
-                arcpy.Select_analysis   (Out_put,Out_put + 'AFTER STUBBURN_PARTS') # #################delete
                 arcpy.Delete_management (Out_put)
                 arcpy.Select_analysis   (path,parcal_all_Final)
 
@@ -2074,10 +2077,12 @@ def generateCurves(fc):
             else:
                 polygon = PtsToPolygon(poly[0])
 
-            diff    = polygon.symmetricDifference(geom)
+            diff    = polygon.symmetricDifference(geom.buffer(0.01)).buffer(-0.01)
             diff_sp = arcpy.MultipartToSinglepart_management(diff, arcpy.Geometry())
             if len(diff_sp) > 0:
                 arcpy.Append_management(diff_sp, Curves, "NO_TEST")
+
+    Multi_to_single(Curves)
     return Curves
 
 
@@ -2625,11 +2630,13 @@ ToolShare  = os.path.dirname(Scripts)
 Scratch    = ToolShare + "\\Scratch"
 ToolData   = ToolShare + "\\ToolData"
 
-parcels_bankal         = arcpy.GetParameterAsText(0)
+# parcels_bankal         = arcpy.GetParameterAsText(0)
+parcels_bankal         = r"C:\Users\Administrator\Desktop\medad\python\Work\Mpy_Pro\Tazar_for Run\EditTazar89693\CadasterEdit_Tazar.gdb\PARCEL_ALL_EDIT"
 Folder                 = Scratch
 Dis_limit_border_pnts  = 1
 sett                   = ToolData + '\\' + r'Set.gdb\Sett'
-CURRENT                = r'CURRENT'
+# CURRENT                = r'CURRENT'
+CURRENT                = r"C:\Users\Administrator\Desktop\medad\python\Work\Mpy_Pro\Tazar_for Run\EditTazar89693\EditTazar89693.aprx"
 
 
 print_arcpy_message     ("# # # # # # # S T A R T # # # # # #",status = 1)
