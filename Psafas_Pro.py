@@ -166,7 +166,7 @@ def PrePare_Data(parcel_bankal,parcels_copy,points_copy,Point_bankal,GDB,name_ba
     AOI                = GDB + '\\' + 'AOI'
     Point_bankal_Cut   = GDB + '\\' + 'Point_bankal_Cut'
     Holes_data         = GDB + '\\' + 'Holes_Prepare_data'
-
+    parcel_as_hole     = GDB + '\\' + 'parcel_as_hole'
 
     # Create Tazar Border, Curves
     arcpy.Dissolve_management                  (parcels_copy,tazar_border)
@@ -201,7 +201,9 @@ def PrePare_Data(parcel_bankal,parcels_copy,points_copy,Point_bankal,GDB,name_ba
     if Multi:
         print_arcpy_message("You have Multi layer after insert new tazar")
 
-    return AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut
+    Feature_to_polygon(parcel_Bankal_cut,parcel_as_hole)
+
+    return AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut,parcel_as_hole
 
 
 def CheckResultsIsOK(parcel_all,tazar_border,num):
@@ -427,11 +429,13 @@ def clean_slivers_by_vertex(PARCEL_ALL,SLIVERS_CLEAN,border,Dis_search,PARCEL_AL
                                     if num_point == 0:
                                             first_point = point
                                     num_point = num_point + 1
-            polygon = PtsToPolygon(pts)
+
             if pts[0] != pts[-1] and first_point:
                     #print "ooops.... - polygon not closed"
                     pts.append(first_point)
-            row.Shape       = polygon
+
+            polygon    = PtsToPolygon(pts)
+            row.Shape  = polygon
             rows.updateRow(row)
 
     arcpy.Delete_management(gdb + "\\PARCEL_ALL_lyr_COPY_DEL")
@@ -737,18 +741,6 @@ def Delete_curves_out_AOI(parcel_new,bankal_old):
 
 
 
-def update_curves(fc,curve):
-        for row in arcpy.SearchCursor(curve):
-                upd_rows = arcpy.UpdateCursor(fc)
-                curve_g = row.Shape
-                midpnt = curve_g.centroid
-                for upd_row in upd_rows:
-                        if upd_row.Shape.distanceTo(midpnt)== 0:
-                                diff = upd_row.Shape.difference (curve_g)
-                                new_geometry = curve_g.union(diff)
-                                upd_row.Shape = new_geometry
-                                upd_rows.updateRow(upd_row) 
-
 def names_curves(fc,tazar,curve):
 
         '''
@@ -767,15 +759,12 @@ def names_curves(fc,tazar,curve):
         upd_rows = arcpy.UpdateCursor('curvs_lyr')
         for row in upd_rows:
                 for Search_row in arcpy.SearchCursor(fc):
-                    try: 
+                    if Search_row.Shape:
                         if Search_row.Shape.distanceTo(row.Shape.centroid)== 0:
                                 if Search_row.PARCEL_ID > 0:
                                     if row.PARCEL_ID == None:
                                         row.PARCEL_ID = Search_row.PARCEL_ID
                                         upd_rows.updateRow(row)
-                    except:
-                        print ("Coudnt make Names for curves")
-                        pass
 
 
 def Update_Layer_Curves_By_ID(fc,tazar,curve):
@@ -797,7 +786,7 @@ def Update_Layer_Curves_By_ID(fc,tazar,curve):
     add_field      (curve,'PARCEL_ID','LONG')
     Delete_polygons(fc,curve)
     Update_Polygons(fc,tazar)
-    Fix_curves     (fc,tazar,curve)
+    Fix_curves     (fc,tazar,tazar,curve)
 
 
     Search_data = {row.PARCEL_ID:row.Shape for row in arcpy.SearchCursor(curve) if row.PARCEL_ID}
@@ -1386,7 +1375,7 @@ def stubborn_parts(path,bankal,tazar,Out_put,curves = ''):
             arcpy.CopyFeatures_management(path,Out_put)
       
 
-def fix_holes_Overlaps_By_Length(path,tazar,path2):
+def fix_holes_Overlaps_By_Length(path,tazar,parcel_as_hole,path2):
 
     GDB = os.path.dirname(path)
 
@@ -1408,6 +1397,7 @@ def fix_holes_Overlaps_By_Length(path,tazar,path2):
         
     Feature_to_polygon(path2, FEATURE_TO_POLYGON)
     Delete_polygons             (FEATURE_TO_POLYGON, path2, slivers)
+    Delete_polygons             (slivers, parcel_as_hole)
         
     number_of_slivers = int(str(arcpy.GetCount_management(slivers)))
     if number_of_slivers > 0:
@@ -1460,7 +1450,7 @@ def fix_holes_Overlaps_By_Length(path,tazar,path2):
             print("no holes found".format(str(number_of_slivers)))
 
 
-def Snap_border_pnts(ws,border,parcel_all,Dis_search = 1):
+def Snap_border_pnts(border,parcel_all,Dis_search = 1):
 
 
     print_arcpy_message('START Func: Snap border pnts',1)
@@ -1533,15 +1523,16 @@ def Snap_border_pnts(ws,border,parcel_all,Dis_search = 1):
                     if num_point == 0:
                         first_point = point
                     num_point = num_point + 1
-        polygon = PtsToPolygon(pts)
         if pts[0] != pts[-1] and first_point:
             #print "ooops.... - polygon not closed"
             pts.append(first_point)
-        row.Shape       = polygon
+
+        polygon    = PtsToPolygon(pts)
+        row.Shape  = polygon
         rows.updateRow(row)
 
 
-def clean_pseudo(parcel_all, border,curves):
+def clean_pseudo(parcel_all, border,curves,modad_parcel_c):
 
     def clean_pseudo_vertices(polygon_before, border_geom, nodes_pts):
         for part in polygon_before:
@@ -1597,7 +1588,7 @@ def clean_pseudo(parcel_all, border,curves):
             upd_rows.updateRow(upd_row)
 
 
-    Fix_curves              (parcel_all,border,curves)
+    Fix_curves              (parcel_all,border,modad_parcel_c,curves)
 
     after_vertxs    = Layer_Management(parcel_all).vertxs_Count()
     deleted_vertexs = before_vertxs - after_vertxs
@@ -2046,7 +2037,8 @@ def generateCurves(fc):
     Curves  = fc_gdb + "\\" + fc_name + "_curves_polygon"
     #print "generateCurves("+fc_name+")..."
     arcpy.CreateFeatureclass_management(fc_gdb, fc_name + "_curves_polygon", "POLYGON", "", "", "",fc)
-    curveFeatureList = []
+    add_field                          (Curves,'ID_orig','SHORT')
+
     for row in arcpy.SearchCursor(fc):
         pts = []
         geom = row.Shape
@@ -2077,7 +2069,7 @@ def generateCurves(fc):
             else:
                 polygon = PtsToPolygon(poly[0])
 
-            diff    = polygon.symmetricDifference(geom.buffer(0.01)).buffer(-0.01)
+            diff    = polygon.symmetricDifference(geom.buffer(0.01).buffer(-0.01))
             diff_sp = arcpy.MultipartToSinglepart_management(diff, arcpy.Geometry())
             if len(diff_sp) > 0:
                 arcpy.Append_management(diff_sp, Curves, "NO_TEST")
@@ -2204,18 +2196,20 @@ def Polygon_To_Line(fc,layer_new):
 
     arcpy.RepairGeometry_management(layer_new)
 
-def Fix_curves(fc,tazar_border,curves):
+def Fix_curves(fc,tazar_border,tazar_copy,curves):
 
-        print_arcpy_message("START Func: Fix curves",1)
 
-        name       = fc
         gdb        = os.path.dirname(fc)
         curves_cut = gdb + '\\' + 'curves_cut'
-        fc2        = gdb + '\\' + 'temp'
         
-        Delete_polygons(curves,tazar_border,curves_cut)
-        Delete_polygons(fc,curves_cut,fc2)      
-        arcpy.MakeFeatureLayer_management(fc2,'ARCEL_ALL_FINAL_lyr')
+        arcpy.MakeFeatureLayer_management     (curves,'curves_layer')
+        arcpy.SelectLayerByLocation_management('curves_layer','HAVE_THEIR_CENTER_IN',tazar_border,'','','INVERT')
+        arcpy.Select_analysis                 ('curves_layer',curves_cut)
+
+        arcpy.MakeFeatureLayer_management     (fc,'Del_tazar',"\"PARCEL_ID\" is null")
+        arcpy.DeleteFeatures_management       ('Del_tazar')   
+
+        arcpy.MakeFeatureLayer_management     (fc,'ARCEL_ALL_FINAL_lyr')
         
         list_Upd = []
         cursor = arcpy.SearchCursor(curves_cut)
@@ -2225,21 +2219,22 @@ def Fix_curves(fc,tazar_border,curves):
                 if layer_ID:
                     list_Upd.append([layer_ID[0],i.shape])
 
+        if list_Upd:
+            for i in list_Upd:
+                    upd_cursor = arcpy.UpdateCursor(fc)
+                    for up_row in upd_cursor:
+                            geom = up_row.shape
+                            id   = up_row.OBJECTID
+                            if str(id) == str(i[0]):
+                                    new_geom     = geom.union (i[1])
+                                    up_row.shape = new_geom
+                                    upd_cursor.updateRow(up_row)  
 
-        for i in list_Upd:
-                upd_cursor = arcpy.UpdateCursor(fc2)
-                for up_row in upd_cursor:
-                        geom = up_row.shape
-                        id   = up_row.OBJECTID
-                        if str(id) == str(i[0]):
-                                new_geom     = geom.union (i[1])
-                                up_row.shape = new_geom
-                                upd_cursor.updateRow(up_row)  
 
 
-        arcpy.Delete_management (fc)
         arcpy.Delete_management (curves_cut)
-        arcpy.Rename_management (fc2, name)
+        arcpy.Append_management (tazar_copy,fc,"NO_TEST")
+        
         
 
 def VerticesToTable2(fc, table,c):
@@ -2674,10 +2669,10 @@ if CheckIfSkipProcess(parcel_bankal_c,parcel_modad_c,GDB):
 ChangeFieldNames                   (parcel_modad_c,arc_modad_c,point_modad_c)  # שינוי שמות השדות לפורמט בנק"ל
 connect_parcel_to_sett             (parcel_modad_c,sett,parcel_bankal_c)       # הזנה של שמות ומספרי מפתח של ישובים לחלקות ניסיון ראשון
 
-AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut = PrePare_Data    (parcel_bankal_c,parcel_modad_c,point_modad_c,point_bankal_c,GDB,'POINT_NAME','POINT_NAME')
+AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut,parcel_as_hole  =  PrePare_Data(parcel_bankal_c,parcel_modad_c,point_modad_c,point_bankal_c,GDB,'POINT_NAME','POINT_NAME')
 
 Get_Attr_From_parcel               (AOI,parcel_modad_c)                        #במידה והכלי מאתר שכל הישובים מסביב אותו דבר connect_parcel_to_sett גורס את הפעולה של
-Fix_curves                         (AOI,tazar_border,Curves)
+Fix_curves                         (AOI,tazar_border,parcel_modad_c,Curves)
 add_err_pts_to_mxd                 (GDB, ToolData + "\\lyr_files", ToolData + "\\demo.gdb",CURRENT) # parcels_bankal[1] = Current
 
 
@@ -2690,9 +2685,9 @@ Sub_Processing(parcel_bankal,parcel_modad_c,point_bankal,point_modad,arc_bankal,
 
 if Continue:
     Dis_border_pnts = get_default_Snap_border (Point_bankal_Cut,parcel_modad_c,Dis_limit_border_pnts) 
-    Snap_border_pnts        (GDB , tazar_border ,AOI,Dis_border_pnts) # סתימת חורים ע"י הזזת נקודות גבול
+    Snap_border_pnts        (tazar_border ,AOI,Dis_border_pnts) # סתימת חורים ע"י הזזת נקודות גבול
     Update_Polygons         (AOI , parcel_modad_c)
-    Fix_curves              (AOI,tazar_border,Curves)
+    Fix_curves              (AOI,tazar_border,parcel_modad_c,Curves)
     AOI_best  = AOI
 
     if CheckResultsIsOK(AOI,tazar_border,2):                
@@ -2719,23 +2714,26 @@ if Continue:
 
 if Continue:
         # # # # # # # Work Only if there is still Holes
-    fix_holes_Overlaps_By_Length  (AOI2,tazar_border   ,AOI3)      # סתימת חורים ע"י שיוך לפי קו גדול משותף גדול ביותר
-    clean_pseudo                  (AOI3,tazar_border   ,Curves)
+    fix_holes_Overlaps_By_Length  (AOI2,tazar_border,parcel_as_hole ,AOI3)      # סתימת חורים ע"י שיוך לפי קו גדול משותף גדול ביותר
+    clean_pseudo                  (AOI3,tazar_border   ,Curves ,parcel_modad_c)
     Update_Layer_Curves_By_ID     (AOI3,parcel_modad_c ,Curves)
 
     AOI_best = AOI3
 
 CheckResultsIsOK(AOI_best,tazar_border,5)
 
-fix_holes_Overlaps_By_Length  (AOI_best,tazar_border   ,AOI_Fix) 
+fix_holes_Overlaps_By_Length  (AOI_best,tazar_border,parcel_as_hole ,AOI_Fix) 
 stubborn_parts                (AOI_Fix,parcel_bankal_c,parcel_modad_c,AOI_final,Curves)
 Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
 
 fix_tolerance                 (AOI_final,tazar_border)
+Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
 get_no_node_vertex            (AOI_final,tazar_border,point_modad_c,Point_bankal_Cut)
 Delete_curves_out_AOI         (AOI_final,parcel_bankal)
+Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
 Fix_Multi_part_Bankal         (AOI_final,tazar_border,parcel_Bankal_cut) # מתקן חלקות רחוקות שנפגעו בגלל שיש בהן חורים
 Update_Polygons               (AOI_final,parcel_modad_c)
+Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
 CheckResultsIsOK              (AOI_final,tazar_border,6)                # בדיקת סופית, כמה חורים נשארו
 
 #  #  #  #  #  # # Prepare Insert to Razaf  #  #  #  #  #  #  # 
