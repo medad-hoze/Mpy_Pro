@@ -12,10 +12,6 @@ import numpy as np
 
 arcpy.env.overwriteOutput = True
 
-# -*- coding: utf-8 -*-
-
-# -*- coding: utf-8 -*-
-
 # # # # # # # # # # # # # # # P S A F A S    T O O L S # # # # # # # # # # # # # # # 
 
 
@@ -805,6 +801,10 @@ def Update_Layer_Curves_By_ID(fc,tazar,curve):
             row.shape = Search_data[row.PARCEL_ID].union(row.Shape)
             upd_rows.updateRow(row) 
 
+
+    arcpy.MakeFeatureLayer_management     (fc,'Del_tazar',"\"PARCEL_ID\" is null")
+    arcpy.DeleteFeatures_management       ('Del_tazar') 
+    arcpy.Append_management               (tazar,fc,"NO_TEST")
 
 def Fix_Multi_part_Bankal(layer,tazar_border,parcel_Bankal_cut):
 
@@ -2625,14 +2625,11 @@ ToolShare  = os.path.dirname(Scripts)
 Scratch    = ToolShare + "\\Scratch"
 ToolData   = ToolShare + "\\ToolData"
 
-# parcels_bankal         = arcpy.GetParameterAsText(0)
-parcels_bankal         = r"C:\Users\Administrator\Desktop\medad\python\Work\Mpy_Pro\Tazar_for Run\EditTazar89693\CadasterEdit_Tazar.gdb\PARCEL_ALL_EDIT"
+parcels_bankal         = arcpy.GetParameterAsText(0)
 Folder                 = Scratch
 Dis_limit_border_pnts  = 1
 sett                   = ToolData + '\\' + r'Set.gdb\Sett'
-# CURRENT                = r'CURRENT'
-CURRENT                = r"C:\Users\Administrator\Desktop\medad\python\Work\Mpy_Pro\Tazar_for Run\EditTazar89693\EditTazar89693.aprx"
-
+CURRENT                = r'CURRENT'
 
 print_arcpy_message     ("# # # # # # # S T A R T # # # # # #",status = 1)
 
@@ -2674,7 +2671,7 @@ AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut,parcel_as_hole  =  Pr
 Get_Attr_From_parcel               (AOI,parcel_modad_c)                        #במידה והכלי מאתר שכל הישובים מסביב אותו דבר connect_parcel_to_sett גורס את הפעולה של
 Fix_curves                         (AOI,tazar_border,parcel_modad_c,Curves)
 add_err_pts_to_mxd                 (GDB, ToolData + "\\lyr_files", ToolData + "\\demo.gdb",CURRENT) # parcels_bankal[1] = Current
-
+names_curves                       (AOI ,parcel_modad_c,Curves)
 
 if CheckResultsIsOK(AOI,tazar_border,1):
     AOI_best  = AOI
@@ -2702,7 +2699,6 @@ else:
     # # # # # # # במידה ואין חורים, ויש אינטרסקטים קטנים ממוצע של 1, הכלי ידלג על המשך הפעולות הגאומטריות
 
 if Continue:
-    names_curves              (AOI ,parcel_modad_c,Curves)
     clean_slivers_by_vertex   (AOI ,holes_2,tazar_border,2,AOI2)
     Update_Layer_Curves_By_ID (AOI2,parcel_modad_c,Curves)
     Clean_non_exist_pnts      (AOI2,tazar_border ,parcel_bankal_c,parcel_modad_c)
@@ -2727,13 +2723,12 @@ stubborn_parts                (AOI_Fix,parcel_bankal_c,parcel_modad_c,AOI_final,
 Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
 
 fix_tolerance                 (AOI_final,tazar_border)
-Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
+Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
 get_no_node_vertex            (AOI_final,tazar_border,point_modad_c,Point_bankal_Cut)
 Delete_curves_out_AOI         (AOI_final,parcel_bankal)
-Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
 Fix_Multi_part_Bankal         (AOI_final,tazar_border,parcel_Bankal_cut) # מתקן חלקות רחוקות שנפגעו בגלל שיש בהן חורים
 Update_Polygons               (AOI_final,parcel_modad_c)
-Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
+Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
 CheckResultsIsOK              (AOI_final,tazar_border,6)                # בדיקת סופית, כמה חורים נשארו
 
 #  #  #  #  #  # # Prepare Insert to Razaf  #  #  #  #  #  #  # 
