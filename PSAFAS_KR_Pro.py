@@ -537,9 +537,9 @@ def ChangeFieldNames(parcel,line,point):
                         arcpy.CalculateField_management  (lyr, field[1]  , "!"+field[0]+"!"  , "PYTHON", "")
 
     try:
-        arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in !ParcelName! if i.isdigit()]))", "PYTHON" ) 
+        arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in str(!PARCEL_FINAL!) if i.isdigit()]))", "PYTHON" ) 
     except:
-        arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in !PARCEL_FINAL! if i.isdigit()]))", "PYTHON" ) 
+        arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in !ParcelName! if i.isdigit()]))", "PYTHON" ) 
 
 
 def add_err_pts_to_mxd(our_gdb, folder, data_source,CURRENT):
@@ -2617,7 +2617,24 @@ def Get_layer_gdb_Copy(gdb):
 
     return parcel_bankal_c,arc_bankal_c,point_bankal_c,parcel_modad_c,arc_modad_c,point_modad_c
 
+def Delete_small_double_parcel(path):
 
+    Multi_to_single(path)
+
+    data       = [[str(row[0]) +'-' + str(row[1])+ '-' + str(row[2]),row[3]] for row in arcpy.da.SearchCursor(path,["GUSH_NUM","GUSH_SUFFIX","PARCEL","SHAPE@AREA",])]
+    df         = pd.DataFrame(data = data,columns = ['KEY','area'])
+    df['Rank'] = df.groupby('KEY')['area'].rank(method='dense',ascending=False)
+    to_del     = {i[1]:i[0] for i in df[df['Rank'] > 1].values.tolist() if i[1] < 200} # only slivers smaller then 200 
+    len_del    = len(to_del)
+
+    if len_del > 0:
+        print_arcpy_message("Found: {} parcels that are double parcels, trying to fix it".format(str(len_del)),2)
+        with arcpy.da.UpdateCursor(path,["GUSH_NUM","GUSH_SUFFIX","PARCEL","SHAPE@AREA"]) as Ucursor:
+            for row in Ucursor:
+                key = row[3]
+                if to_del.get(key):
+                    if to_del[key] == str(row[0]) +'-' + str(row[1])+ '-' + str(row[2]):
+                        Ucursor.deleteRow()
 
 scriptPath = os.path.abspath(__file__)
 Scripts    = os.path.dirname(scriptPath)
@@ -2718,6 +2735,7 @@ if Continue:
 
 CheckResultsIsOK(AOI_best,tazar_border,5)
 
+Delete_small_double_parcel    (AOI_best)
 fix_holes_Overlaps_By_Length  (AOI_best,tazar_border,parcel_as_hole ,AOI_Fix) 
 stubborn_parts                (AOI_Fix,parcel_bankal_c,parcel_modad_c,AOI_final,Curves)
 Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
