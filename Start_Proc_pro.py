@@ -113,7 +113,7 @@ for i in range(len(list_path_Num[0])):
     tazar_folder,tazar_gdb,parcel_tazar,line_tazar,point_tazar = Create_Folder_gdb_Source_layers(list_path_Num,folder_out_put)
 
     gush_to_add = Get_Uni_Gush(path_bankal,parcel_tazar)
-    add_uuid    = str(uuid.uuid4())[::4]
+    add_uuid    = ''.join(i for i in str(uuid.uuid4())[::4] if i not in ['-','.','+'])
     lyr_name    = 'bankal_lyr' + add_uuid
 
     parcel      = tazar_gdb + '\\' + 'PARCEL_ALL_EDIT'
@@ -131,9 +131,9 @@ for i in range(len(list_path_Num[0])):
     arcpy.DeleteField_management (line,'FID_Diss')
 
     # Creating New Point
-    arcpy.MakeFeatureLayer_management      (path_point      ,'path_point_lyr')
-    arcpy.SelectLayerByLocation_management ('path_point_lyr',"INTERSECT",name_diss)
-    arcpy.CopyFeatures_management          ('path_point_lyr', point)
+    arcpy.MakeFeatureLayer_management      (path_point      ,'path_point_lyr' + add_uuid)
+    arcpy.SelectLayerByLocation_management ('path_point_lyr' + add_uuid,"INTERSECT",name_diss)
+    arcpy.CopyFeatures_management          ('path_point_lyr' + add_uuid, point)
 
     # Creating Errors Polygon, Line, Points
     for err_fc_name in ["Errors_Line", "Errors_Point", "Errors_Polygon"]: arcpy.Copy_management(gdb_path_template + "\\" + err_fc_name, tazar_gdb + "\\" + err_fc_name)
