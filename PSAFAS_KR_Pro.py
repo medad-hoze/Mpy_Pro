@@ -334,7 +334,6 @@ def get_no_node_vertex(AOI,tazar_border,Modad_node,PARCEL_ALL_node):
     return GDB + "\\" + "Possible_Error_points"
 
 
-
 def clean_slivers_by_vertex(PARCEL_ALL,SLIVERS_CLEAN,border,Dis_search,PARCEL_ALL_lyr):
 
     print_arcpy_message ("START Func: clean slivers by vertex")
@@ -393,12 +392,13 @@ def clean_slivers_by_vertex(PARCEL_ALL,SLIVERS_CLEAN,border,Dis_search,PARCEL_AL
     rows = arcpy.UpdateCursor(PARCEL_ALL_lyr)
     for row in rows:
             geometry = row.Shape
-            oid = row.OBJECTID
-            pts = []
+            oid  = row.OBJECTID
+            pts  = []
+            ring = []
             poly_vertices = [r for r in distance_vertices if r[0][5] == oid]
             for part in geometry:
                     for pt in part:
-                            if pt:
+                            if str(type(pt)) != "<type 'NoneType'>":
                                     num_point = 0
                                     #print str(pt.X) + "--" + str(pt.Y)
                                     this_x = float("{0:.2f}".format(pt.X))
@@ -411,32 +411,37 @@ def clean_slivers_by_vertex(PARCEL_ALL,SLIVERS_CLEAN,border,Dis_search,PARCEL_AL
                                                     else:
                                                             #print "pseodo, but important: keep the vertex"
                                                             point = pt
-                                                            pts.append(point)
+                                                            ring.append([point.X,point.Y])
                                             # tazar point in buffer
                                             else:
                                                     # check minimum distance
                                                     the_minimum_vertex = [v for v in this_vertex if v[1] == min([i[1] for i in this_vertex])]
                                                     point = arcpy.Point(the_minimum_vertex[0][0][9], the_minimum_vertex[0][0][10])
-                                                    pts.append(point)
+                                                    ring.append([point.X,point.Y])
                                     # point not on sliver: keep the vertex
                                     else:
                                             point = pt
-                                            pts.append(point)
+                                            ring.append([point.X,point.Y])
                                     if num_point == 0:
                                             first_point = point
                                     num_point = num_point + 1
+                            else:
+                                ring.append([first_point.X, first_point.Y])
+                                ring.append(None)
+                                num_point = 0
 
-            if pts[0] != pts[-1] and first_point:
-                    #print "ooops.... - polygon not closed"
-                    pts.append(first_point)
+            # if pts[0] != pts[-1] and first_point:
+            #         #print "ooops.... - polygon not closed"
+            #         pts.append(first_point)
 
-            polygon    = PtsToPolygon(pts)
-            row.Shape  = polygon
+            pts.append(ring)
+            polygon = PtsToPolygon1(pts)
+            
+            row.Shape       = polygon
             rows.updateRow(row)
 
     arcpy.Delete_management(gdb + "\\PARCEL_ALL_lyr_COPY_DEL")
     return PARCEL_ALL_lyr
-
 
 
 
@@ -498,7 +503,8 @@ def ChangeFieldNames(parcel,line,point):
         Take 3 layers, Changing fields from Source layers to bankal format
     '''
 
-    wrong = {'TALAR_NUM':'TALAR_NUMBER','GushNum':'GUSH_NUM','GushSuffix':'GUSH_SUFFIX','ParcelName':'PARCEL','LegalArea':'LEGAL_AREA','GUSHNUM':'GUSH_NUM','GUSHSUFFIX':'GUSH_SUFFIX','PARCEL_FINAL':'PARCEL','LEGALAREA':'LEGAL_AREA'}
+    wrong = {'TALAR_NUM':'TALAR_NUMBER','GushNum':'GUSH_NUM','GushSuffix':'GUSH_SUFFIX',\
+             'LegalArea':'LEGAL_AREA','GUSHNUM':'GUSH_NUM','GUSHSUFFIX':'GUSH_SUFFIX','LEGALAREA':'LEGAL_AREA'} # 'ParcelName':'PARCEL','PARCEL_FINAL':'PARCEL'
 
     List_fields = [[str(i.name),wrong[str(i.name)]] for i in arcpy.ListFields(parcel) if str(i.name) in list(wrong.keys())]
 
@@ -524,7 +530,7 @@ def ChangeFieldNames(parcel,line,point):
                         add_field(lyr,field[1],'LONG')
                         arcpy.CalculateField_management  (lyr, field[1]  , "!"+field[0]+"!"  , "PYTHON", "")
 
-                    if field[0] in ['GushSuffix','ParcelName','PARCEL_FINAL','GUSHSUFFIX']:
+                    if field[0] in ['GushSuffix','PARCEL_FINAL','GUSHSUFFIX']: # 'ParcelName'
                         add_field(lyr,field[1],'SHORT')
                         arcpy.CalculateField_management  (lyr, field[1]  , "!"+field[0]+"!"  , "PYTHON", "")
 
@@ -540,28 +546,6 @@ def ChangeFieldNames(parcel,line,point):
         arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in str(!PARCEL_FINAL!) if i.isdigit()]))", "PYTHON" ) 
     except:
         arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in !ParcelName! if i.isdigit()]))", "PYTHON" ) 
-
-
-def add_err_pts_to_mxd(our_gdb, folder, data_source,CURRENT):
-
-    # copy 3 error fcs from data_source (demo.gdb) to our_gdb
-    err_fc_names = ["Errors_Line", "Errors_Point", "Errors_Polygon"]
-    for err_fc_name in err_fc_names:
-        arcpy.DeleteRows_management(data_source + "\\" + err_fc_name)
-        arcpy.Copy_management(data_source + "\\" + err_fc_name, our_gdb + "\\" + err_fc_name)
-    
-    mxd = arcpy.mp.ArcGISProject (CURRENT)
-    df  = mxd.listMaps('Layers')[0]
-    for root, dir, files in os.walk(folder):
-        for file in files:
-            file_full_path  = root + "\\" + file
-            if file == "Errors_Line.lyr" or file == "Errors_Point.lyr" or file == "Errors_Polygon.lyr" or file == "Possible_Error_points.lyr" or file == "PARCEL_ALL_EDIT_copy.lyr" or file == "PARCEL_NODE_EDIT_copy.lyr" or file == "PARCEL_ARC_EDIT_copy.lyr":
-                addLayer   = arcpy.mp.LayerFile(file_full_path)
-                df.addLayer(addLayer, "TOP")
-                try:
-                    mxd.updateConnectionProperties(data_source, our_gdb)
-                except:
-                    print ("Coudnt replace Data Source")
 
 
 def Parcel_data(path_after,path_before,copy_tazar):
@@ -650,6 +634,7 @@ def Insert_to_table(bankal,tazar_copy,GDB):
     columns = [f.name for f in arcpy.ListFields(tazar_copy)]
     print_arcpy_message(columns)
 
+    add_field(tazar_copy,'PARCEL_FINAL','SHORT')
     None_me = [i for i in arcpy.SearchCursor(tazar_copy) if i.PARCEL_FINAL == None]
     if None_me:
         arcpy.CalculateField_management  (tazar_copy, 'PARCEL_FINAL', "int( ''.join ([i for i in !PARCELNAME! if i.isdigit()]))", "PYTHON" ) 
@@ -826,7 +811,7 @@ def Fix_Multi_part_Bankal(layer,tazar_border,parcel_Bankal_cut):
 	Multi_part_inter = layer            +'Temp2'
 	save_name        = layer
 
-	arcpy.Buffer_analysis     (tazar_border,diss_temp,250)
+	arcpy.Buffer_analysis     (tazar_border,diss_temp,400)
 
 	Delete_polygons            (parcel_Bankal_cut,diss_temp,after_del)
 
@@ -1449,8 +1434,32 @@ def fix_holes_Overlaps_By_Length(path,tazar,parcel_as_hole,path2):
     else:
             print("no holes found".format(str(number_of_slivers)))
 
+def PtsToPolygon1(coord_list):
+    parts = arcpy.Array()
+    rings = arcpy.Array()
+    ring = arcpy.Array()
+    for part in coord_list:
+        for pnt in part:
+            if pnt:
+                ring.add(arcpy.Point(pnt[0], pnt[1]))
+            else:
+                # null point - we are at the start of a new ring
+                rings.add(ring)
+                ring.removeAll()
+        # we have our last ring, add it
+        rings.add(ring)
+        ring.removeAll()
+        # if we only have one ring: remove nesting
+        if len(rings) == 1:
+            rings = rings.getObject(0)
+        parts.add(rings)
+        rings.removeAll()
+    # if single-part (only one part) remove nesting
+    if len(parts) == 1:
+        parts = parts.getObject(0)
+    return arcpy.Polygon(parts)
 
-def Snap_border_pnts(border,parcel_all,Dis_search = 1):
+def Snap_border_pnts(border,parcel_all,Dis_search):
 
 
     print_arcpy_message('START Func: Snap border pnts',1)
@@ -1493,10 +1502,14 @@ def Snap_border_pnts(border,parcel_all,Dis_search = 1):
         geometry = row.Shape
         oid = row.OBJECTID
         pts = []
+        ring = []
         poly_vertices = [r for r in distance_vertices if r[0][5] == oid]
         for part in geometry:
+            counter = 0
             for pt in part:
-                if pt:
+                if str(type(pt)) != "<type 'NoneType'>":
+                    if counter == 0:
+                        first_pt = pt
                     num_point = 0
                     #print str(pt.X) + "--" + str(pt.Y)
                     this_x = float("{0:.2f}".format(pt.X))
@@ -1509,25 +1522,36 @@ def Snap_border_pnts(border,parcel_all,Dis_search = 1):
                             else:
                                 #print "pseodo, but important: keep the vertex"
                                 point = pt
-                                pts.append(point)
+                                #pts.append(point)
+                                ring.append([pt.X, pt.Y])
                         # tazar point in buffer
                         else:
                             # check minimum distance
                             the_minimum_vertex = [v for v in this_vertex if v[1] == min([i[1] for i in this_vertex])]
                             point = arcpy.Point(the_minimum_vertex[0][0][9], the_minimum_vertex[0][0][10])
-                            pts.append(point)
+                            #pts.append(point)
+                            ring.append([the_minimum_vertex[0][0][9], the_minimum_vertex[0][0][10]])
                     # point not on sliver: keep the vertex
                     else:
                         point = pt
-                        pts.append(point)
+                        #pts.append(point)
+                        ring.append([pt.X, pt.Y])
                     if num_point == 0:
                         first_point = point
                     num_point = num_point + 1
-        if pts[0] != pts[-1] and first_point:
+                    counter = counter + 1
+                else:
+                    ring.append([first_pt.X, first_pt.Y])
+                    ring.append(None)
+                    counter = 0
+            
+        #if pts[0] != pts[-1] and first_point:
             #print "ooops.... - polygon not closed"
-            pts.append(first_point)
+            #pts.append(first_point)
+                    
+        pts.append(ring)  
 
-        polygon    = PtsToPolygon(pts)
+        polygon    = PtsToPolygon1(pts)
         row.Shape  = polygon
         rows.updateRow(row)
 
@@ -2305,6 +2329,13 @@ def fix_tolerance(layer_path,border):
     lyr_management.Multi_to_single       ()
     lyr_management.Fill_Holes_in_Polygon (holes_to_keep,False,True)
 
+    lyr_management = Layer_Management    (border)
+    lyr_management.Fill_Holes_in_Polygon (holes_to_keep_tazar,False,True)
+
+    arcpy.arcpy.MakeFeatureLayer_management(layer_path,'layer_path_lyr')
+    arcpy.SelectLayerByLocation_management('layer_path_lyr',"ARE_IDENTICAL_TO",holes_to_keep_tazar)
+    if int(str(arcpy.GetCount_management('layer_path_lyr'))) > 0: arcpy.CopyFeatures_management ('layer_path_lyr',holes_to_insert)
+
     Ucursor = arcpy.UpdateCursor(layer_path)
     for i in Ucursor:
         ring = arcpy.Array()
@@ -2336,6 +2367,8 @@ def fix_tolerance(layer_path,border):
 
     
     Delete_polygons(layer_path,holes_to_keep)
+    Delete_polygons(layer_path,holes_to_keep_tazar)
+    if arcpy.Exists(holes_to_insert):arcpy.Append_management (holes_to_insert,layer_path, 'NO_TEST')
 
 
 def Spatial_Connection_To_LabelPoint(layer,ref,field_to_pass = []):
@@ -2687,7 +2720,6 @@ AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut,parcel_as_hole  =  Pr
 
 Get_Attr_From_parcel               (AOI,parcel_modad_c)                        #במידה והכלי מאתר שכל הישובים מסביב אותו דבר connect_parcel_to_sett גורס את הפעולה של
 Fix_curves                         (AOI,tazar_border,parcel_modad_c,Curves)
-add_err_pts_to_mxd                 (GDB, ToolData + "\\lyr_files", ToolData + "\\demo.gdb",CURRENT) # parcels_bankal[1] = Current
 names_curves                       (AOI ,parcel_modad_c,Curves)
 
 if CheckResultsIsOK(AOI,tazar_border,1):
