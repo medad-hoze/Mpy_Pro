@@ -97,7 +97,7 @@ def Sub_Processing(bankal,modad_c,points,pnt_modad,Lines,line_modad,border,copy_
 
                 # מחיקת כפילויות אם יש
         add_field                 (points,'X_Y','TEXT')
-        arcpy.CalculateField_management(points, "X_Y", "calc(!shape.centroid.X!,!shape.centroid.Y!)", "PYTHON_9.3", "def calc (x,y):\\n    return str(round(x,1)) + '-' + str(round(y,1))")
+        arcpy.CalculateField_management(points, "X_Y","str(round(!shape.centroid.X!,1)) + '-' + str(round(!shape.centroid.Y!,1))", "PYTHON_9.3")
 
         del_identical   (points,'X_Y')
 
@@ -162,7 +162,6 @@ def PrePare_Data(parcel_bankal,parcels_copy,points_copy,Point_bankal,GDB,name_ba
     AOI                = GDB + '\\' + 'AOI'
     Point_bankal_Cut   = GDB + '\\' + 'Point_bankal_Cut'
     Holes_data         = GDB + '\\' + 'Holes_Prepare_data'
-    parcel_as_hole     = GDB + '\\' + 'parcel_as_hole'
 
     # Create Tazar Border, Curves
     arcpy.Dissolve_management                  (parcels_copy,tazar_border)
@@ -197,9 +196,7 @@ def PrePare_Data(parcel_bankal,parcels_copy,points_copy,Point_bankal,GDB,name_ba
     if Multi:
         print_arcpy_message("You have Multi layer after insert new tazar")
 
-    Feature_to_polygon(parcel_Bankal_cut,parcel_as_hole)
-
-    return AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut,parcel_as_hole
+    return AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut
 
 
 def CheckResultsIsOK(parcel_all,tazar_border,num):
@@ -398,7 +395,8 @@ def clean_slivers_by_vertex(PARCEL_ALL,SLIVERS_CLEAN,border,Dis_search,PARCEL_AL
             poly_vertices = [r for r in distance_vertices if r[0][5] == oid]
             for part in geometry:
                     for pt in part:
-                            if str(type(pt)) != "<type 'NoneType'>":
+                            # if str(type(pt)) != "<type 'NoneType'>":
+                            if pt:
                                     num_point = 0
                                     #print str(pt.X) + "--" + str(pt.Y)
                                     this_x = float("{0:.2f}".format(pt.X))
@@ -545,7 +543,7 @@ def ChangeFieldNames(parcel,line,point):
     try:
         arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in str(!PARCEL_FINAL!) if i.isdigit()]))", "PYTHON" ) 
     except:
-        arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in !ParcelName! if i.isdigit()]))", "PYTHON" ) 
+        arcpy.CalculateField_management  (parcel, 'PARCEL', "int( ''.join ([i for i in !PARCELNAME! if i.isdigit()]))", "PYTHON" ) 
 
 
 def Parcel_data(path_after,path_before,copy_tazar):
@@ -637,7 +635,10 @@ def Insert_to_table(bankal,tazar_copy,GDB):
     add_field(tazar_copy,'PARCEL_FINAL','SHORT')
     None_me = [i for i in arcpy.SearchCursor(tazar_copy) if i.PARCEL_FINAL == None]
     if None_me:
-        arcpy.CalculateField_management  (tazar_copy, 'PARCEL_FINAL', "int( ''.join ([i for i in !PARCELNAME! if i.isdigit()]))", "PYTHON" ) 
+        try:
+            arcpy.CalculateField_management  (tazar_copy, 'PARCEL_FINAL', "int( ''.join ([i for i in !PARCELNAME! if i.isdigit()]))", "PYTHON" )
+        except:
+            arcpy.CalculateField_management  (tazar_copy, 'PARCEL_FINAL', "int( ''.join ([i for i in !ParcelName! if i.isdigit()]))", "PYTHON" ) 
 
     new_shamce = False
     try:
@@ -1360,7 +1361,7 @@ def stubborn_parts(path,bankal,tazar,Out_put,curves = ''):
             arcpy.CopyFeatures_management(path,Out_put)
       
 
-def fix_holes_Overlaps_By_Length(path,tazar,parcel_as_hole,path2):
+def fix_holes_Overlaps_By_Length(path,tazar,path2):
 
     GDB = os.path.dirname(path)
 
@@ -1373,7 +1374,7 @@ def fix_holes_Overlaps_By_Length(path,tazar,parcel_as_hole,path2):
     line               = GDB + '\Line'
     slivers_Intersect  = GDB + '\slivers_Intersect'
 
-    arcpy.Intersect_analysis          ([path2], inter)
+    arcpy.analysis.Intersect          ([path2], inter)
     if int(str(arcpy.GetCount_management(inter))) > 0:
         Delete_polygons                   (path2,inter)
 
@@ -1382,7 +1383,6 @@ def fix_holes_Overlaps_By_Length(path,tazar,parcel_as_hole,path2):
         
     Feature_to_polygon(path2, FEATURE_TO_POLYGON)
     Delete_polygons             (FEATURE_TO_POLYGON, path2, slivers)
-    Delete_polygons             (slivers, parcel_as_hole)
         
     number_of_slivers = int(str(arcpy.GetCount_management(slivers)))
     if number_of_slivers > 0:
@@ -1395,16 +1395,16 @@ def fix_holes_Overlaps_By_Length(path,tazar,parcel_as_hole,path2):
 
             Polygon_To_Line   (PARACELS_Only, line)
 
-            sliver_feature_layer = GDB + '\\' + 'sliver_feature_layer'
-            arcpy.MakeFeatureLayer_management      (slivers, sliver_feature_layer)
-            arcpy.SelectLayerByLocation_management (sliver_feature_layer, 'BOUNDARY_TOUCHES', tazar)
-            intersect_list = [sliver_feature_layer,line]
+            arcpy.MakeFeatureLayer_management      (slivers, 'sliver_feature_layer')
+            arcpy.SelectLayerByLocation_management ('sliver_feature_layer', 'BOUNDARY_TOUCHES', tazar)
+            intersect_list = ['sliver_feature_layer',line]
 
             arcpy.Intersect_analysis    (intersect_list, slivers_Intersect, "ALL", ".001 Meters", "INPUT")
 
             data       = [[row[0],row[1],row[2]] for row in arcpy.da.SearchCursor(slivers_Intersect,['KEY_sliv','FID_Line','SHAPE@LENGTH'])]
                 
             df         = pd.DataFrame(data,columns= ['KEY_sliv','KEY_parcel_1','SHAPE@LENGTH'])
+            df         = df.astype(float)
             df["RANK"] = df.groupby('KEY_sliv')['SHAPE@LENGTH'].rank(method='first',ascending=False)
             df         = df[df['RANK'] == 1]
 
@@ -1507,7 +1507,8 @@ def Snap_border_pnts(border,parcel_all,Dis_search):
         for part in geometry:
             counter = 0
             for pt in part:
-                if str(type(pt)) != "<type 'NoneType'>":
+                # if str(type(pt)) != "<type 'NoneType'>":
+                if pt:
                     if counter == 0:
                         first_pt = pt
                     num_point = 0
@@ -1890,7 +1891,7 @@ def Delete_polygons(fc,del_layer,Out_put = ''):
         Out_put = fc
     
     if desc.ShapeType == u'Point':
-        del_layer_temp = 'in_memory' + '\\' + 'Temp'
+        del_layer_temp = r'in_memory' + '\\' + 'Temp'
         arcpy.Dissolve_management(del_layer,del_layer_temp)
 
         if desc.ShapeType == u'Point':
@@ -1908,7 +1909,7 @@ def Delete_polygons(fc,del_layer,Out_put = ''):
     else:
         count_me = int(str(arcpy.GetCount_management(del_layer)))
         if count_me > 0:
-            temp = 'in_memory' +'\\'+'_temp'
+            temp = r'in_memory' +'\\'+'_temp'
             arcpy.Dissolve_management(del_layer,temp)
             if int(str(arcpy.GetCount_management(temp))) > 0:
                 geom_del = [row.shape for row in arcpy.SearchCursor (temp)][0]
@@ -2316,9 +2317,12 @@ def VerticesToTable2(fc, table,c):
 
 def fix_tolerance(layer_path,border):
     
-    gdb           = os.path.dirname(border)
-    border_diss   = gdb + '\\' + 'border_diss'
-    holes_to_keep = gdb + '\\' + 'holes_to_keep'
+    gdb                 = os.path.dirname(border)
+    border_diss         = gdb + '\\' + 'border_diss'
+    holes_to_keep       = gdb + '\\' + 'holes_to_keep'
+    holes_to_keep_tazar = gdb + '\\' + 'holes_to_keep_tazar'
+    holes_to_insert     = gdb + '\\' + 'holes_to_insert'
+    
     arcpy.Dissolve_management(border,border_diss)
 
     dic_point = {str([float('{0:.0f}'.format(pt.X)),float('{0:.0f}'.format(pt.Y))]):[pt.X,pt.Y] for i in arcpy.SearchCursor(border_diss) for part in i.Shape for pt in part if pt}
@@ -2716,7 +2720,7 @@ if CheckIfSkipProcess(parcel_bankal_c,parcel_modad_c,GDB):
 ChangeFieldNames                   (parcel_modad_c,arc_modad_c,point_modad_c)  # שינוי שמות השדות לפורמט בנק"ל
 connect_parcel_to_sett             (parcel_modad_c,sett,parcel_bankal_c)       # הזנה של שמות ומספרי מפתח של ישובים לחלקות ניסיון ראשון
 
-AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut,parcel_as_hole  =  PrePare_Data(parcel_bankal_c,parcel_modad_c,point_modad_c,point_bankal_c,GDB,'POINT_NAME','POINT_NAME')
+AOI,tazar_border,Curves,parcel_Bankal_cut,Point_bankal_Cut  =  PrePare_Data(parcel_bankal_c,parcel_modad_c,point_modad_c,point_bankal_c,GDB,'POINT_NAME','POINT_NAME')
 
 Get_Attr_From_parcel               (AOI,parcel_modad_c)                        #במידה והכלי מאתר שכל הישובים מסביב אותו דבר connect_parcel_to_sett גורס את הפעולה של
 Fix_curves                         (AOI,tazar_border,parcel_modad_c,Curves)
@@ -2727,7 +2731,7 @@ if CheckResultsIsOK(AOI,tazar_border,1):
     Continue  = False
 
     # # # # # # # # בודק אם יש שינוי בגבולת אך ללא שינוי בתוך התצר, במידה ואין שינוי בגבולות, מחליף בין היישויות
-Sub_Processing(parcel_bankal,parcel_modad_c,point_bankal,point_modad,arc_bankal,arc_modad,tazar_border,AOI,GDB)
+Sub_Processing(parcel_bankal,parcel_modad_c,point_bankal,point_modad,arc_bankal,arc_modad,tazar_border,parcel_modad_c,GDB)
 
 if Continue:
     Dis_border_pnts = get_default_Snap_border (Point_bankal_Cut,parcel_modad_c,Dis_limit_border_pnts) 
@@ -2759,27 +2763,27 @@ if Continue:
 
 if Continue:
         # # # # # # # Work Only if there is still Holes
-    fix_holes_Overlaps_By_Length  (AOI2,tazar_border,parcel_as_hole ,AOI3)      # סתימת חורים ע"י שיוך לפי קו גדול משותף גדול ביותר
+    fix_holes_Overlaps_By_Length  (AOI2,tazar_border,AOI3)      # סתימת חורים ע"י שיוך לפי קו גדול משותף גדול ביותר
     clean_pseudo                  (AOI3,tazar_border   ,Curves ,parcel_modad_c)
     Update_Layer_Curves_By_ID     (AOI3,parcel_modad_c ,Curves)
 
     AOI_best = AOI3
 
-CheckResultsIsOK(AOI_best,tazar_border,5)
+CheckResultsIsOK              (AOI_best,tazar_border,5)
 
 Delete_small_double_parcel    (AOI_best)
-fix_holes_Overlaps_By_Length  (AOI_best,tazar_border,parcel_as_hole ,AOI_Fix) 
+fix_holes_Overlaps_By_Length  (AOI_best,tazar_border,AOI_Fix) 
 stubborn_parts                (AOI_Fix,parcel_bankal_c,parcel_modad_c,AOI_final,Curves)
 Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
 
+CheckResultsIsOK              (AOI_final,tazar_border,6)
+
 fix_tolerance                 (AOI_final,tazar_border)
-Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
 get_no_node_vertex            (AOI_final,tazar_border,point_modad_c,Point_bankal_Cut)
 Delete_curves_out_AOI         (AOI_final,parcel_bankal)
 Fix_Multi_part_Bankal         (AOI_final,tazar_border,parcel_Bankal_cut) # מתקן חלקות רחוקות שנפגעו בגלל שיש בהן חורים
 Update_Polygons               (AOI_final,parcel_modad_c)
-Update_Layer_Curves_By_ID     (AOI_final,parcel_modad_c,Curves)
-CheckResultsIsOK              (AOI_final,tazar_border,6)                # בדיקת סופית, כמה חורים נשארו
+CheckResultsIsOK              (AOI_final,tazar_border,7)                # בדיקת סופית, כמה חורים נשארו
 
 #  #  #  #  #  # # Prepare Insert to Razaf  #  #  #  #  #  #  # 
 print_arcpy_message ("  #   #   #    # Preper data For Insert  #   #   #   #  ")
