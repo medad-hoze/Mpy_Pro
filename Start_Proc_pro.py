@@ -94,8 +94,8 @@ path_bankal       = r'C:\Users\Administrator\Desktop\medad\python\Work\Mpy\Test_
 path_line         = r'C:\Users\Administrator\Desktop\medad\python\Work\Mpy\Test_finish_proc\Cadaster\PSEFAS_DATA.gdb\PARCEL_ARC'
 path_point        = r'C:\Users\Administrator\Desktop\medad\python\Work\Mpy\Test_finish_proc\Cadaster\PSEFAS_DATA.gdb\PARCEL_NODE'
 
-path_source_tazar         = r'C:\Users\Administrator\Desktop\medad\python\Work\Mpy\Test_Start_proc\data\1005'
-# path_source_tazar         = arcpy.GetParameterAsText(0) # folder of tazars to make as AOI
+# path_source_tazar         = r'C:\Users\Administrator\Desktop\medad\python\Work\Mpy\Test_Start_proc\data\1005'
+path_source_tazar         = arcpy.GetParameterAsText(0) # folder of tazars to make as AOI
 
 # Out_put
 folder_out_put    = r'C:\Users\Administrator\Desktop\medad\python\Work\Mpy_Pro\Temp'
