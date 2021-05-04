@@ -795,7 +795,7 @@ def Update_Layer_Curves_By_ID(fc,tazar,curve):
 def Fix_Multi_part_Bankal(layer,tazar_border,parcel_Bankal_cut):
 
 	'''
-	[INFO] -  מתקן חלקות בנקל שמחוברות לתצר אבל נהרסו במהל העבודה, יתקן על מה ש-250 מטר מהתצר
+	[INFO] -  מתקן חלקות בנקל שמחוברות לתצר אבל נהרסו במהל העבודה, יתקן על מה ש-400 מטר מהתצר
 
 	INPUT:
 	1) layer             = שכבת העבודה אחרי עריכה
@@ -888,46 +888,35 @@ def delete_Line_by_polygon(AOI_Line,tazar_border,Dissolve = False,num = 0.001):
                     row[0]    = new_geom
                     cursor.updateRow(row)
 
-def Create_Line_AOI(aoi,tazar_border,curves,bankal_line,modad_line,New_Line):
+def Create_Line_AOI(AOI_final,tazar_border,curves,Line_bankal_c,line_modad_c,New_Line):
 
     print_arcpy_message('START Func: Create_Line_AOI',1)
 
-    gdb = os.path.dirname(tazar_border)
-    bankal_cut   = gdb + '\\' + 'bankal_cut'
-    curves_temp  = gdb + '\\' + 'curves_temp'
+    gdb          = os.path.dirname(tazar_border)
     Return_line  = gdb + '\\' + 'Return_line'
 
-    Polygon_To_Line_holes    (aoi,New_Line)
-    Split_Line_By_Vertex     (New_Line)
-    delete_Line_by_polygon   (New_Line,tazar_border)
+    Polygon_To_Line_holes                  (AOI_final,Return_line)
+    arcpy.MakeFeatureLayer_management      (Return_line,'Return_line_lyr')
+    arcpy.SelectLayerByLocation_management ('Return_line_lyr','INTERSECT',tazar_border,'','','invert')
+    arcpy.management.DeleteFeatures        ('Return_line_lyr')
 
-    Layer_Management         (curves).Select_By_Location('COMPLETELY_WITHIN',tazar_border,'1 Meters',curves_temp,'invert')
+    Split_Line_By_Vertex          (Return_line)
 
-    Layer_Management         (New_Line).Select_By_Location('INTERSECT',curves_temp)
+    Layer_Management(Return_line).Select_By_Location('INTERSECT',curves)
+    Layer_Management(Return_line).Select_By_Location('INTERSECT',tazar_border,0.1,'','invert')
 
-    Layer_Management         (bankal_line).Select_By_Location ('INTERSECT',aoi,0,bankal_cut)
+    fix_tolerance_line(Return_line,AOI_final)
 
-    Layer_Management         (bankal_cut).Select_By_Location ('INTERSECT',curves_temp,0,Return_line)  # החזרה של הקווים שנמחקו בעקבות הקשתות
+    arcpy.Append_management        (line_modad_c,Return_line,'NO_TEST')
+    arcpy.CopyFeatures_management  (Line_bankal_c,New_Line)
 
-    Layer_Management         (bankal_cut).Select_By_Location ('INTERSECT',aoi,'1 Meters',None,'invert')
+    Layer_Management(New_Line).Select_By_Location('WITHIN_CLEMENTINI',AOI_final)
+    Layer_Management(New_Line).Select_By_Location('INTERSECT',tazar_border)  
 
-    delete_Line_by_polygon   (bankal_cut,tazar_border,False,1)
 
-    arcpy.Append_management  (bankal_cut,New_Line,'NO_TEST')
-    Layer_Management         (Return_line).Select_By_Location('INTERSECT',tazar_border,0,None,'invert') 
+    arcpy.Append_management       (Return_line,New_Line,'NO_TEST')
 
-    arcpy.Append_management  (Return_line,New_Line,'NO_TEST')
-
-    Multi_to_single          (New_Line)
-
-    del_line_Not_on_parcels  (New_Line,aoi)
-
-    Delete_Duplic_Line       (New_Line)
-
-    fix_tolerance_line       (New_Line,tazar_border)
-
-    Delete_layers_after_use([bankal_cut,curves_temp])
-
+    arcpy.Delete_management       (Return_line)
 
     return New_Line
 
@@ -1714,8 +1703,6 @@ def Connect_Lines(layer,layer_new,min_dis):
 
     new_list = Layer_To_Edge_list(layer)
 
-    Diss = 'in_memory\Diss_layer'
-
     ws, fc_name = os.path.split (layer_new)
     s_r         = arcpy.Describe (layer).spatialReference
 
@@ -2500,24 +2487,24 @@ def Delete_Duplic_Line(fc):
 
 	if int(str(arcpy.GetCount_management(del_layer))) > 0:
 
-                del_layer_temp = 'in_memory' + '\\' + 'Temp'
-                arcpy.Dissolve_management(del_layer,del_layer_temp)
+            del_layer_temp = 'in_memory\Temp'
+            arcpy.Dissolve_management(del_layer,del_layer_temp)
 
-                geom_del = [row.shape for row in arcpy.SearchCursor (del_layer_temp)][0]
-                Ucursor  = arcpy.UpdateCursor (fc)
+            geom_del = [row.shape for row in arcpy.SearchCursor (del_layer_temp)][0]
+            Ucursor  = arcpy.UpdateCursor (fc)
+            for row in Ucursor:
                 for row in Ucursor:
-                        for row in Ucursor:
-                            if geom_del:
-                                if row.shape:
-                                    geom_up     = row.shape
-                                    new_geom    = geom_up.difference(geom_del)
-                                    row.shape = new_geom
-                                    Ucursor.updateRow (row)
+                    if geom_del:
+                        if row.shape:
+                            geom_up     = row.shape
+                            new_geom    = geom_up.difference(geom_del)
+                            row.shape = new_geom
+                            Ucursor.updateRow (row)
 
 
-                arcpy.Dissolve_management              (del_layer,diss_layer)
-                arcpy.MultipartToSinglepart_management (diss_layer,Append_layer)
-                arcpy.Append_management                (Append_layer,fc,"NO_TEST")
+            arcpy.Dissolve_management              (del_layer,diss_layer)
+            arcpy.MultipartToSinglepart_management (diss_layer,Append_layer)
+            arcpy.Append_management                (Append_layer,fc,"NO_TEST")
 
 
 def Layer_To_Edge_list(layer):
@@ -2783,6 +2770,7 @@ get_no_node_vertex            (AOI_final,tazar_border,point_modad_c,Point_bankal
 Delete_curves_out_AOI         (AOI_final,parcel_bankal)
 Fix_Multi_part_Bankal         (AOI_final,tazar_border,parcel_Bankal_cut) # מתקן חלקות רחוקות שנפגעו בגלל שיש בהן חורים
 Update_Polygons               (AOI_final,parcel_modad_c)
+Fix_curves                    (AOI_final,tazar_border,parcel_modad_c,Curves)
 CheckResultsIsOK              (AOI_final,tazar_border,7)                # בדיקת סופית, כמה חורים נשארו
 
 #  #  #  #  #  # # Prepare Insert to Razaf  #  #  #  #  #  #  # 
@@ -2791,9 +2779,10 @@ print_arcpy_message ("  #   #   #    # Preper data For Insert  #   #   #   #  ")
 Calculate_Area_Rashum   (AOI_final)
 NewGushim               (parcel_modad_c, parcel_bankal,AOI_final)
 Get_Point_AOI           (AOI_final,point_bankal_c,point_modad_c,AOI_Point)
+
 Create_Line_AOI         (AOI_final,tazar_border,Curves,arc_bankal_c,arc_modad_c,AOI_Line)
 
-#  #  #  #  #  #  # insert To Razaf #  #  #  #  #  #  #  # #
+# #  #  #  #  #  #  # insert To Razaf #  #  #  #  #  #  #  # #
 
 print_arcpy_message ("  #   #   #    # insert To Razaf  #   #   #   #  ")
 
@@ -2809,12 +2798,12 @@ arcpy.Append_management   (AOI_Line,arc_bankal,'NO_TEST')
 
 Multi_to_single           (arc_bankal)
 
-arcpy.Append_management  (arc_modad_c,arc_bankal,'NO_TEST')
+arcpy.Append_management   (arc_modad_c,arc_bankal,'NO_TEST')
 
-del_Non_Boundery_Line    (arc_bankal,AOI_final,tazar_border)
+del_Non_Boundery_Line     (arc_bankal,AOI_final,tazar_border)
 
-Find_stubbern_lines      (arc_bankal,AOI_final,tazar_border)
-Delete_Duplic_Line       (arc_bankal)
+Find_stubbern_lines       (arc_bankal,AOI_final,tazar_border)
+Delete_Duplic_Line        (arc_bankal)
 
 # # # # Points
 
